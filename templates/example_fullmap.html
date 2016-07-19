@@ -54,6 +54,7 @@
         var options = {};
         var map = null;
         var markers = [];
+        var polyline;
         // Adds a marker to the map and push to the array.
         function addMarker(options = {}) {
             var default_options = {map: map}
@@ -126,17 +127,23 @@
 
 
 
-
             // Requests the data and populates the map
             $.get(baseURL + "/data", function(response){
                 var json_obj = $.parseJSON(response);
                 deleteMarkers();
                 markers = json_obj["markers"]
-                line = json_obj["line"]
-                if (line != null) {
-                    var polyline = new google.maps.Polyline(line);
+
+                if (polyline != null) {
+                    polyline.setMap(null)
+                }
+
+                polylineData = json_obj["line"]
+                if (polylineData != null) {
+                    polyline = new google.maps.Polyline(polylineData);
                     polyline.setMap(map);
                 }
+
+ 
                 console.log("got the line as " + console.dir(json_obj))
                 for (var index in markers) {
                     var item = markers[index];
