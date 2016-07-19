@@ -36,6 +36,9 @@ from requests.adapters import ConnectionError
 from requests.models import InvalidURL
 from transform import *
 
+import polyline as pl
+
+
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 API_URL = 'https://pgorelease.nianticlabs.com/plfe/rpc'
@@ -743,6 +746,7 @@ app = create_app()
 @app.route('/data')
 def data():
     """ Gets all the PokeMarkers via REST """
+
     return json.dumps(get_pokemarkers())
 
 @app.route('/raw_data')
@@ -766,7 +770,6 @@ def config():
 @app.route('/')
 def fullmap():
     clear_stale_pokemons()
-
     return render_template(
         'example_fullmap.html', fullmap=get_map(), auto_refresh=auto_refresh)
 
@@ -784,7 +787,6 @@ def next_loc():
         NEXT_LAT = float(lat)
         NEXT_LONG = float(lon)
         return 'ok'
-
 
 def get_pokemarkers():
     pokeMarkers = [{
@@ -849,7 +851,57 @@ def get_pokemarkers():
             'lng': stop[1],
             'infobox': 'Pokestop',
         })
-    return pokeMarkers
+
+    polyline = {
+        'stroke_color': '#0AB0DE',
+        'stroke_opacity': 1.0,
+        'stroke_weight': 3,
+    }
+
+
+    if len(pokeMarkers) > 1:
+        print("get path")
+
+        directions_url = 'https://maps.googleapis.com/maps/api/directions/json'
+        params = {}
+        # params['origin'] = 'Disneyland'
+        params['origin'] = pokemarker_to_str(pokeMarkers[0])
+
+        params['destination'] = pokemarker_to_str(pokeMarkers[min(len(pokeMarkers) - 1, 22)])
+        params['waypoints'] = pokemarkers_to_str(pokeMarkers[1:min(len(pokeMarkers) - 1, 22)])
+        params['key'] = GOOGLEMAPS_KEY
+        r = requests.get(directions_url, params=params, verify=False)
+        json = r.json()
+
+        if (len(json['routes']) > 0):
+
+            overview_polyline = pl.decode(json['routes'][0]['overview_polyline']['points'])
+            print(overview_polyline)
+
+            optimal_path = []
+            for coord in overview_polyline:
+                optimal_path.append({'lat':coord[0] ,'lng':coord[1]})
+            # print(len(json['routes'][0]['legs']))
+
+            polyline['path'] = optimal_path
+            print("OPT PATH ", optimal_path)
+
+
+    line_and_markers = {}
+    line_and_markers["line"] = polyline
+    line_and_markers["markers"] = pokeMarkers
+    return line_and_markers
+
+def pokemarker_to_str(pokemarker):
+    return str(pokemarker["lat"]) + "," + str(pokemarker["lng"])
+
+def pokemarkers_to_str(pokemarkers):
+    waypoints_str = "optimize:true"
+
+    for pokemarker in pokemarkers:
+        waypoints_str += "|" + pokemarker_to_str(pokemarker)
+
+    return waypoints_str
 
 
 def get_map():
@@ -858,8 +910,8 @@ def get_map():
         style='height:100%;width:100%;top:0;left:0;position:absolute;z-index:200;',
         lat=origin_lat,
         lng=origin_lon,
-        markers=get_pokemarkers(),
-        zoom='15', )
+        markers=get_pokemarkers()["markers"],
+        zoom='15')
     return fullmap
 
 
